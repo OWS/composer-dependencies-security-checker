@@ -5,7 +5,7 @@
   "keywords": ["security", "dependencies", "checker"],
   "license": "GPL-2.0-or-later",
   "require": {
-      "composer/semver": "^1.5",
+      "composer/semver": "^1.5 || ^3.0",
       "ext-json": "*"
   },
   "autoload": {
