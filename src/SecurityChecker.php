@@ -121,15 +121,20 @@ class SecurityChecker
      *   - version
      *   - links.
      */
-    protected function calculateSecurityUpdates(array $composer_lock_data, array $security_advisories_composer_json)
+    protected function calculateSecurityUpdates(array $composer_lock_data, array $security_advisories_composer_json, bool $excludeDev = false)
     {
+        if ($excludeDev) {
+            $packages = $composer_lock_data['packages-dev'];
+        }
+        else {
+            $packages = array_merge(
+                $composer_lock_data['packages-dev'],
+                $composer_lock_data['packages']
+            );
+        }
         $updates = [];
-        $both = array_merge(
-            $composer_lock_data['packages-dev'],
-            $composer_lock_data['packages']
-        );
         $conflict = $security_advisories_composer_json['conflict'];
-        foreach ($both as $package) {
+        foreach ($packages as $package) {
             $name = $package['name'];
             $version = $package['version'];
             if (empty($conflict[$name]) || !Semver::satisfies($version, $conflict[$name])) {
