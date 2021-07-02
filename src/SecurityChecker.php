@@ -44,6 +44,8 @@ class SecurityChecker
      *
      * @param string $composer_lock
      *   The composer.lock file to check.
+     * @param bool $exclude_dev
+     *   Only check for production dependencies.
      *
      * @return array
      *   An array with the status and the possibles vulnerabilities founded.
@@ -52,7 +54,7 @@ class SecurityChecker
      *
      * @throws \Exception
      */
-    public function checkComposer($composer_lock)
+    public function checkComposer($composer_lock, bool $exclude_dev = false)
     {
         $vulnerabilities = [];
         $status = 'ok';
@@ -62,7 +64,8 @@ class SecurityChecker
             $security_advisories_composer_json = $this->fetchAdvisoryComposerJson($url);
             $updates = $this->calculateSecurityUpdates(
                 $composer_lock_data,
-                $security_advisories_composer_json
+                $security_advisories_composer_json,
+                $exclude_dev
             );
             if (!empty($updates)) {
                 $vulnerabilities += $updates;
@@ -113,6 +116,8 @@ class SecurityChecker
      *   The contents of a composer.lock file.
      * @param array $security_advisories_composer_json
      *   The composer.json array from the security-advisory.
+     * @param bool $exclude_dev
+     *   Only check for production dependencies.
      *
      * @return array
      *   Security updates availables, keyed by package name,
@@ -121,15 +126,20 @@ class SecurityChecker
      *   - version
      *   - links.
      */
-    protected function calculateSecurityUpdates(array $composer_lock_data, array $security_advisories_composer_json)
+    protected function calculateSecurityUpdates(array $composer_lock_data, array $security_advisories_composer_json, bool $exclude_dev = false)
     {
+        if ($exclude_dev) {
+            $packages = $composer_lock_data['packages'];
+        }
+        else {
+            $packages = array_merge(
+                $composer_lock_data['packages-dev'],
+                $composer_lock_data['packages']
+            );
+        }
         $updates = [];
-        $both = array_merge(
-            $composer_lock_data['packages-dev'],
-            $composer_lock_data['packages']
-        );
         $conflict = $security_advisories_composer_json['conflict'];
-        foreach ($both as $package) {
+        foreach ($packages as $package) {
             $name = $package['name'];
             $version = $package['version'];
             if (empty($conflict[$name]) || !Semver::satisfies($version, $conflict[$name])) {
