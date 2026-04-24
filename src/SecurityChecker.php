@@ -2,7 +2,12 @@
 
 namespace Ows\ComposerDependenciesSecurityChecker;
 
+use Composer\Semver\Comparator;
+use Composer\Semver\Constraint\Constraint;
+use Composer\Semver\Constraint\MultiConstraint;
+use Composer\Semver\Intervals;
 use Composer\Semver\Semver;
+use Composer\Semver\VersionParser;
 use Exception;
 
 /**
@@ -139,6 +144,9 @@ class SecurityChecker
         }
         $updates = [];
         $conflict = $security_advisories_composer_json['conflict'];
+
+        $versionParser = new VersionParser();
+
         foreach ($packages as $package) {
             $name = $package['name'];
             $version = $package['version'];
@@ -146,19 +154,47 @@ class SecurityChecker
                 continue;
             }
 
+            $normalizedVersion = $versionParser->normalize($version);
+            $currentVersionSup = new Constraint('>', $normalizedVersion);
+            $constraints = $versionParser->parseConstraints($conflict[$name]);
+            if ($constraints instanceof MultiConstraint) {
+                foreach ($constraints->getConstraints() as $constraint) {
+                    if (Intervals::isSubsetOf($constraint, $currentVersionSup)) {
+                        $constraintOk = $constraint;
+                        break;
+                    }
+                }
+            }
+
+            $versionOk = $version;
+            if (isset($constraintOk)) {
+                if (method_exists($constraintOk, 'getVersion')) {
+                   $versionOk = $constraintOk->getVersion();
+                } else {
+                  $versionOk = $constraintOk->getLowerBound()->getVersion();
+                }
+            }
+
             if (mb_strpos($package['type'], 'drupal-') === 0) {
                 if ($name == 'drupal/core') {
                     $module_name = 'drupal';
                 } else {
                     $module_name = str_replace('drupal/', '', $name);
-                    $version = $package['source']['reference'];
+                    if ($versionOk == $version) {
+                        $version = $package['source']['reference'];
+                    }
                 }
 
-                $title = $module_name . ' : Version ' . $version;
-                $link = "https://www.drupal.org/project/$module_name/releases/" . $version;
+                $matches = [];
+                if (preg_match('#(\d+\.\d+\.\d+)\.0#', $versionOk, $matches)) {
+                  $versionOk = $matches[1];
+                }
+
+                $title = $module_name . ' : Version ' . $versionOk;
+                $link = "https://www.drupal.org/project/$module_name/releases/" . $versionOk;
             } else {
-                $title = $name . ' : Version ' . $version;
-                $link = "https://packagist.org/packages/$name#" . $version;
+                $title = $name . ' : Version ' . $versionOk;
+                $link = "https://packagist.org/packages/$name#" . $versionOk;
             }
 
             $updates[$name] = [
